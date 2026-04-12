@@ -1,0 +1,18 @@
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    ports:
+      - "8443:80"
+    volumes:
+      - vaultwarden-data:/data
+      - ./nucboxg3-plus.tail781be8.ts.net.crt:/ssl/cert.pem:ro
+      - ./nucboxg3-plus.tail781be8.ts.net.key:/ssl/key.pem:ro
+    environment:
+      - DOMAIN=https://nucboxg3-plus.tail781be8.ts.net:8443
+      - SIGNUPS_ALLOWED=false
+      - ROCKET_TLS={certs="/ssl/cert.pem",key="/ssl/key.pem"}
+
+volumes:
+  vaultwarden-data:

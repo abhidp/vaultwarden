@@ -1,0 +1,10 @@
+# TLS certificates
+*.crt
+*.key
+
+# Backup logs
+backup-log.txt
+
+# AI tool artifacts
+.aider*
+.deepeval/
