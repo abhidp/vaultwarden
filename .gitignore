@@ -2,9 +2,12 @@
 *.crt
 *.key
 
-# Backup logs
+# Logs
 backup-log.txt
+sync-log.txt
 
 # AI tool artifacts
 .aider*
 .deepeval/
+clauderesume.txt
+secrets.txt
