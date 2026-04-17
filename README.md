@@ -12,6 +12,7 @@ This project sets up Vaultwarden (an unofficial Bitwarden-compatible server) wit
 - **Tailscale Networking**: Secure remote access from anywhere via Tailscale VPN
 - **SSL/TLS Encryption**: Tailscale-issued Let's Encrypt certificates (auto-renewed weekly)
 - **Automated Backups**: Encrypted backups to Google Drive via PowerShell script
+- **Cloud Vault Sync**: Automated sync to Bitwarden cloud (free tier) as cold backup
 - **Docker Deployment**: Containerized deployment using Docker Compose
 - **Data Persistence**: Persistent Docker volume for data storage
 
@@ -19,9 +20,11 @@ This project sets up Vaultwarden (an unofficial Bitwarden-compatible server) wit
 
 - Docker and Docker Compose installed
 - Tailscale installed and configured on server and client devices
-- PowerShell (for backup and cert renewal scripts)
+- PowerShell (for backup, cert renewal, and sync scripts)
 - 7-Zip installed (for encrypted backups)
 - rclone configured with Google Drive
+- Bitwarden CLI (`winget install Bitwarden.CLI`) — for cloud vault sync
+- A free Bitwarden cloud account at vault.bitwarden.com — for cold backup
 
 ## Quick Start
 
@@ -93,6 +96,68 @@ The `backup.ps1` script provides automated encrypted backups:
 - **rclone**: For Google Drive synchronization
   - Configure with: `rclone config`
 
+## Cloud Vault Sync (Cold Backup)
+
+The `sync-to-bitwarden-cloud.ps1` script syncs your entire Vaultwarden vault to a free Bitwarden cloud account as a disaster recovery backup. If your server goes down while you're away from home, you can log into vault.bitwarden.com and access all your passwords.
+
+### How It Works
+
+1. **Export**: Exports vault from Vaultwarden via Bitwarden CLI
+2. **Purge**: Wipes the Bitwarden cloud vault via API (single request, instant)
+3. **Import**: Imports the fresh export into Bitwarden cloud
+4. **Verify**: Confirms item counts match between source and destination
+5. **Cleanup**: Deletes the temporary unencrypted export file
+
+### Required Environment Variables
+
+Set these as **User** environment variables (they persist across reboots):
+
+```powershell
+# Vaultwarden API key (from Vaultwarden web vault → Settings → Security → Keys → API Key)
+[Environment]::SetEnvironmentVariable("VW_API_CLIENTID", "your-vw-client-id", "User")
+[Environment]::SetEnvironmentVariable("VW_API_CLIENTSECRET", "your-vw-client-secret", "User")
+[Environment]::SetEnvironmentVariable("VW_MASTER_PASSWORD", "your-vaultwarden-master-password", "User")
+
+# Bitwarden cloud API key (from vault.bitwarden.com → Settings → Security → Keys → API Key)
+[Environment]::SetEnvironmentVariable("BW_CLOUD_CLIENTID", "your-bw-client-id", "User")
+[Environment]::SetEnvironmentVariable("BW_CLOUD_CLIENTSECRET", "your-bw-client-secret", "User")
+[Environment]::SetEnvironmentVariable("BW_CLOUD_PASSWORD", "your-bitwarden-cloud-master-password", "User")
+```
+
+### Running Manually
+
+```powershell
+.\run-sync.ps1
+```
+
+### Scheduled Task Setup
+
+The sync runs as a Windows Scheduled Task (weekly, Sunday at 3 AM):
+
+1. Open Task Scheduler (`Win + R` → `taskschd.msc`)
+2. Click **Create Task**
+3. **General tab**: Name it `Vaultwarden Sync to Bitwarden Cloud`, select "Run whether user is logged on or not", check "Run with highest privileges"
+4. **Triggers tab**: New → Weekly → Sunday at 3:00 AM
+5. **Actions tab**: New → Program: `powershell.exe`, Arguments: `-NoProfile -ExecutionPolicy Bypass -File "C:\vaultwarden\run-sync.ps1"`, Start in: `C:\vaultwarden`
+6. **Conditions tab**: Uncheck "Start only if on AC power", check "Wake the computer to run this task"
+7. **Settings tab**: Check "Allow task to be run on demand", set "Stop if runs longer than 1 hour"
+
+### Verify Sync
+
+```powershell
+# Check the sync log
+Get-Content C:\vaultwarden\sync-log.txt -Tail 20
+
+# Check scheduled task status
+Get-ScheduledTaskInfo -TaskName "Vaultwarden Sync to Bitwarden Cloud"
+```
+
+### Note on TOTP
+
+Bitwarden's free tier stores TOTP secrets but does not generate codes. If you rely on TOTP, keep a separate backup in Aegis, 2FAS, or Google Authenticator.
+
+---
+
 ## Certificate Renewal
 
 Tailscale TLS certificates are Let's Encrypt certs that **expire every 90 days**. The `renew-cert.ps1` script handles automatic renewal.
@@ -138,6 +203,8 @@ Get-ScheduledTaskInfo -TaskName "Vaultwarden Cert Renewal"
 2. **Certificate Expiry**: Ensure the cert renewal scheduled task is running (check `LastTaskResult`)
 3. **Network Access**: Vaultwarden is only accessible via Tailscale — no ports are exposed to the public internet
 4. **Regular Updates**: Keep the Vaultwarden image updated
+5. **Sync Credentials**: API keys and master passwords are stored as User environment variables — keep your Windows account secure
+6. **Temporary Export**: During sync, an unencrypted JSON export exists briefly in `%TEMP%` — it is deleted immediately after import
 
 ## Maintenance
 
@@ -170,9 +237,11 @@ vaultwarden/
 ├── README.md                                    # This file
 ├── compose.yaml                                 # Docker Compose configuration
 ├── backup.ps1                                   # Encrypted backup to Google Drive
+├── sync-to-bitwarden-cloud.ps1                  # Vault sync to Bitwarden cloud
+├── run-sync.ps1                                 # Wrapper script for Task Scheduler
 ├── renew-cert.ps1                               # Tailscale TLS certificate renewal
-├── nucboxg3-plus.tail781be8.ts.net.crt          # TLS certificate (auto-renewed)
-└── nucboxg3-plus.tail781be8.ts.net.key          # TLS private key (auto-renewed)
+├── nucboxg3-plus.tail781be8.ts.net.crt          # TLS certificate (auto-renewed, gitignored)
+└── nucboxg3-plus.tail781be8.ts.net.key          # TLS private key (auto-renewed, gitignored)
 ```
 
 ## Troubleshooting
