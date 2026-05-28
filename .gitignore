@@ -5,6 +5,7 @@
 # Logs
 backup-log.txt
 sync-log.txt
+update-log.txt
 
 # AI tool artifacts
 .aider*

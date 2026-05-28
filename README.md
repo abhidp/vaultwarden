@@ -197,6 +197,39 @@ Get-ScheduledTaskInfo -TaskName "Vaultwarden Cert Renewal"
 # LastTaskResult should be 0
 ```
 
+## Auto Update
+
+The `update-vaultwarden.ps1` script pulls the latest vaultwarden image and recreates the container if a new version is available. It logs each run to `update-log.txt`.
+
+### Scheduled Task Setup
+
+Run this in an **elevated** PowerShell (Run as Administrator):
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File C:\vaultwarden\update-vaultwarden.ps1" -WorkingDirectory "C:\vaultwarden"
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 4:00AM
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable
+Register-ScheduledTask -TaskName "Vaultwarden Auto Update" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -User $env:USERNAME -Force
+```
+
+### Running Manually
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File C:\vaultwarden\update-vaultwarden.ps1
+```
+
+### Verify
+
+```powershell
+# Check update log
+Get-Content C:\vaultwarden\update-log.txt -Tail 10
+
+# Check scheduled task status
+Get-ScheduledTaskInfo -TaskName "Vaultwarden Auto Update"
+```
+
+---
+
 ## Security Notes
 
 1. **Change Encryption Password**: Update the default password in `backup.ps1`
@@ -240,6 +273,7 @@ vaultwarden/
 ├── sync-to-bitwarden-cloud.ps1                  # Vault sync to Bitwarden cloud
 ├── run-sync.ps1                                 # Wrapper script for Task Scheduler
 ├── renew-cert.ps1                               # Tailscale TLS certificate renewal
+├── update-vaultwarden.ps1                       # Pull latest vaultwarden image and restart
 ├── nucboxg3-plus.tail781be8.ts.net.crt          # TLS certificate (auto-renewed, gitignored)
 └── nucboxg3-plus.tail781be8.ts.net.key          # TLS private key (auto-renewed, gitignored)
 ```
